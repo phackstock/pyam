@@ -1,6 +1,9 @@
+from unittest.mock import patch
+
+import ixmp4 as ixmp4_module
 import pytest
-from ixmp4.core.region import RegionModel
-from ixmp4.core.unit import UnitModel
+from ixmp4.core.region import Region
+from ixmp4.core.unit import Unit
 
 import pyam
 from pyam import read_ixmp4
@@ -11,14 +14,14 @@ from pyam.testing import assert_iamframe_equal
 def test_to_ixmp4_missing_region_raises(test_platform, test_df_year):
     """Writing to platform raises if region not defined"""
     test_df_year.rename(region={"World": "foo"}, inplace=True)
-    with pytest.raises(RegionModel.NotFound, match="foo. Use `Platform.regions."):
+    with pytest.raises(Region.NotFound, match="foo. Use `Platform.regions."):
         test_df_year.to_ixmp4(platform=test_platform)
 
 
 def test_to_ixmp4_missing_unit_raises(test_platform, test_df_year):
     """Writing to platform raises if unit not defined"""
     test_df_year.rename(unit={"EJ/yr": "foo"}, inplace=True)
-    with pytest.raises(UnitModel.NotFound, match="foo. Use `Platform.units."):
+    with pytest.raises(Unit.NotFound, match="foo. Use `Platform.units."):
         test_df_year.to_ixmp4(platform=test_platform)
 
 
@@ -131,3 +134,50 @@ def test_ixmp4_read_run(test_platform, test_df):
     exp = test_df.filter(scenario="scen_a")
     exp.set_meta(1, "version")  # the IamDataFrame read from ixmp4 includes the version
     pyam.assert_iamframe_equal(exp, obs)
+
+
+def test_ixmp4_read_run_with_filters(test_platform, test_df_year):
+    """Read a run with filters"""
+
+    test_df_year.to_ixmp4(platform=test_platform)
+
+    run = test_platform.runs.get("model_a", "scen_a")
+    obs = read_run(run, region="World", variable="Primary Energy", year=2010)
+
+    exp = test_df_year.filter(
+        scenario="scen_a", region="World", variable="Primary Energy", year=2010
+    )
+    exp.set_meta(1, "version")
+    pyam.assert_iamframe_equal(exp, obs)
+
+
+def test_read_ixmp4_string_platform(test_platform, test_df_year):
+    """read_ixmp4 converts a string platform name to a Platform instance"""
+
+    test_df_year.to_ixmp4(platform=test_platform)
+
+    class FakePlatform:
+        def __new__(cls, name):
+            return test_platform
+
+    with patch.object(ixmp4_module, "Platform", FakePlatform):
+        obs = read_ixmp4(platform="test-platform-name")
+
+    test_df_year.set_meta(1, "version")
+    pyam.assert_iamframe_equal(test_df_year, obs)
+
+
+def test_write_to_ixmp4_string_platform(test_platform, test_df_year):
+    """write_to_ixmp4 converts a string platform name to a Platform instance"""
+
+    class FakePlatform:
+        def __new__(cls, name):
+            return test_platform
+
+    with patch.object(ixmp4_module, "Platform", FakePlatform):
+        test_df_year.to_ixmp4(platform="test-platform-name")
+
+    # verify data was written correctly
+    obs = read_ixmp4(platform=test_platform)
+    test_df_year.set_meta(1, "version")
+    pyam.assert_iamframe_equal(test_df_year, obs)
