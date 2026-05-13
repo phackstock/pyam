@@ -2,6 +2,7 @@
 
 ## Individual updates
 
+- [#974](https://github.com/IAMconsortium/pyam/pull/974) Adjust SceSeAuth to work with new authentication classes
 - [#972](https://github.com/IAMconsortium/pyam/pull/972) Fix ixmp4 platform lookup via read_iiasa
 
 # Release v3.3.1
