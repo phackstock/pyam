@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import requests
 import yaml
-from ixmp4.cli.platforms import tabulate_manager_platforms
 from ixmp4.conf.settings import Settings
 from requests.auth import AuthBase
 from toolkit.client.auth import ManagerAuth, SelfSignedAuth
@@ -44,16 +43,21 @@ IXMP4_LOGIN = "Please run `ixmp4 login <username>` in a console"
 DEFAULT_IIASA_CREDS = Path("~").expanduser() / ".local" / "pyam" / "iiasa.yaml"
 
 
-def platforms() -> None:
+def platforms() -> pd.DataFrame:
     """Print a list of available ixmp4 platforms hosted by IIASA
 
     See Also
     --------
-    ixmp4.conf.platforms.ManagerPlatforms.list_platforms
+    ixmp4.conf.platforms.ManagerPlatforms
     """
     settings = Settings()
-    manager_platforms = settings.get_manager_platforms()
-    tabulate_manager_platforms(manager_platforms.list_platforms())
+    platforms = settings.get_manager_platforms().list_platforms()
+
+    logger.info(f"Platforms accessible via {settings.manager_url}")
+    return pd.DataFrame(
+        [(p.name, p.slug, p.accessibility, p.notice or "") for p in platforms],
+        columns=["name", "slug", "accessibility", "notice"],
+    )
 
 
 def _read_config(file):
