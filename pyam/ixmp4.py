@@ -2,7 +2,6 @@ import logging
 
 import ixmp4
 import pandas as pd
-from ixmp4.core.iamc import DataPoint
 from ixmp4.core.region import Region
 from ixmp4.core.unit import Unit
 from ixmp4.data.iamc.datapoint.filter import FacadeDataPointFilter
@@ -145,12 +144,6 @@ def write_to_ixmp4(platform: ixmp4.Platform | str, df, checkpoint_message: str):
             "Only data with standard IAMC columns can be written to an ixmp4 platform."
         )
 
-    if df.time_domain not in ["year", "datetime"]:
-        raise NotImplementedError(
-            "Only data with time domain 'year' or 'datetime' can be written to an ixmp4"
-            " platform."
-        )
-
     if not isinstance(platform, ixmp4.Platform):
         platform = ixmp4.Platform(platform)
 
@@ -173,13 +166,13 @@ def write_to_ixmp4(platform: ixmp4.Platform | str, df, checkpoint_message: str):
         run = platform.runs.create(model=model, scenario=scenario)
 
         with run.transact(checkpoint_message):
-            if df.time_domain == "year":
+            if _df.time_domain in ["year", "datetime"]:
                 run.iamc.add(_df.data)
-            elif df.time_domain == "datetime":
-                run.iamc.add(
-                    _df.data.rename(columns={"time": "step_datetime"}),
-                    type=DataPoint.Type.DATETIME,
-                )
+            # in "mixed" time domain, year and datetime values have to be added
+            # separately for correct column-renaming in ixmp4
+            else:
+                run.iamc.add(_df.filter(time_domain="year").data)
+                run.iamc.add(_df.filter(time_domain="datetime").data)
 
             if not meta.empty:
                 run.meta = dict(meta.loc[(model, scenario)])
