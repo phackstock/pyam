@@ -8,6 +8,8 @@ from ixmp4.data.iamc.datapoint.filter import FacadeDataPointFilter
 from ixmp4.data.meta.filter import FacadeRunMetaEntryFilter
 from ixmp4.data.run.filter import FacadeRunFilter
 
+from pyam.utils import adjust_log_level, remove_from_list
+
 logger = logging.getLogger(__name__)
 
 
@@ -139,9 +141,9 @@ def write_to_ixmp4(platform: ixmp4.Platform | str, df, checkpoint_message: str):
     checkpoint_message : str
         The message for the ixmp4 checkpoint (similar to a commit message).
     """
-    if df.extra_cols:
+    if invalid_extra_cols := remove_from_list(df.extra_cols, ["subannual"]):
         raise NotImplementedError(
-            "Only data with standard IAMC columns can be written to an ixmp4 platform."
+            "Invalid extra-columns: " + ", ".join(invalid_extra_cols)
         )
 
     if not isinstance(platform, ixmp4.Platform):
@@ -157,7 +159,7 @@ def write_to_ixmp4(platform: ixmp4.Platform | str, df, checkpoint_message: str):
         )
         meta = df.meta.drop(columns="version")
     else:
-        meta = df.meta.copy()
+        meta = df.meta
 
     # Create runs and add IAMC timeseries data and meta indicators
     for model, scenario in df.index:
@@ -171,7 +173,9 @@ def write_to_ixmp4(platform: ixmp4.Platform | str, df, checkpoint_message: str):
             # in "mixed" time domain, year and datetime values have to be added
             # separately for correct column-renaming in ixmp4
             else:
-                run.iamc.add(_df.filter(time_domain="year").data)
+                # silence the time-to-year column-renaming log message
+                with adjust_log_level():
+                    run.iamc.add(_df.filter(time_domain="year").data)
                 run.iamc.add(_df.filter(time_domain="datetime").data)
 
             if not meta.empty:
