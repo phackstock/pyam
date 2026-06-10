@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Callable
 
 import ixmp4
 import numpy as np
@@ -31,7 +32,7 @@ from pyam.aggregation import (
     aggregate_data,
 )
 from pyam.compute import IamComputeAccessor
-from pyam.exceptions import format_log_message, raise_data_error
+from pyam.exceptions import deprecation_warning, format_log_message, raise_data_error
 from pyam.filter import (
     datetime_match,
     filter_by_col,
@@ -1701,39 +1702,52 @@ class IamDataFrame:
             _df.index = _df.index.reorder_levels(self.dimensions)
             return _df
 
-    def aggregate_time(
+    def aggregate_time(self, *args, **kwargs):
+        """Aggregate timeseries data by subannual time resolution.
+
+        This  method is deprecated, please use :ref:`aggregate_subannual` instead.
+        """
+        if "column" in kwargs:
+            raise NotImplementedError(
+                "Custom subannual time domain no longer supported."
+            )
+        # TODO: deprecated, remove for release >= 4.1
+        deprecation_warning(
+            "Please use `aggregate_subannual()` instead.", "Method `aggregate_time()`"
+        )
+        return self.aggregate_subannual(*args, **kwargs)
+
+    def aggregate_subannual(
         self,
-        variable,
-        column="subannual",
-        value="year",
-        components=None,
-        method="sum",
-        append=False,
+        variable: str | list[str],
+        *,
+        value: None | str = None,
+        components: None | str | list[str] = None,
+        method: Callable | str = "sum",
+        append: bool = False,
     ):
         """Aggregate timeseries data by subannual time resolution.
 
         Parameters
         ----------
         variable : str or list of str
-            variable(s) to be aggregated
-        column : str, optional
-            the data column to be used as subannual time representation
+            Variable(s) to be aggregated
         value : str, optional
-            the name of the aggregated (subannual) time
+            Name of the aggregated timeslice (default `None` for yearly aggregate)
         components : list of str
-            subannual timeslices to be aggregated; defaults to all subannual
+            Subannual timeslices to be aggregated; defaults to all subannual
             timeslices other than `value`
         method : func or str, optional
-            method to use for aggregation,
+            Method to use for aggregation,
             e.g. :func:`numpy.mean`, :func:`numpy.sum`, 'min', 'max'
         append : bool, optional
-            append the aggregate timeseries to `self` and return None,
+            Append the aggregate timeseries to `self` and return None,
             else return aggregate timeseries as new :class:`IamDataFrame`
         """
         _df = _aggregate_time(
             self,
             variable,
-            column=column,
+            column="subannual",
             value=value,
             components=components,
             method=method,
@@ -2058,6 +2072,12 @@ class IamDataFrame:
                     return np.zeros(len(self), dtype=bool)
 
                 keep_col = datetime_match(self.get_data_column("time"), values)
+
+            elif col == "subannual" and isinstance(values, bool):
+                keep_col = filter_by_col(self._data, "subannual", "*", regexp=False)
+                # if filter is `subannual=False`, keep only where values are `None`
+                if values is False:
+                    keep_col = ~keep_col
 
             elif col == "measurand":
                 keep_col = filter_by_measurand(self._data, values, regexp, level)
